@@ -1,0 +1,138 @@
+<!DOCTYPE html><html lang="zh-Hans"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="北漂一员"><title>web worker简易入门 | 大橙子的博客</title><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/6.0.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.2/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.2/grids-responsive-min.css"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.7.0/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">web worker简易入门</h1><a id="logo" href="/.">大橙子的博客</a><p class="description">人生在勤，不索何获</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> Start</i></a><a href="/archives/"><i class="fa fa-archive"> Archiv</i></a><a href="/about/"><i class="fa fa-user"> Über</i></a><a href="/atom.xml"><i class="fa fa-rss"> RSS</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">web worker简易入门</h1><div class="post-meta">Sep 25, 2013<script src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Hits</span></span></div><div class="post-content"><p>js是单线程的语言，由于此特性，我们在处理并发时需要用到一些技巧，如setTimeout()，setInterval()，调用XMLHttpRequest等。<br>但这里的并发只是非阻塞（参照John Resig的文章<a href="http://ejohn.org/blog/how-javascript-timers-work/" target="_blank" rel="external">How JavaScript Timers Work</a>），真正的多线程编程则需要HTML5的web worker。<br><a id="more"></a></p>
+<p>###<strong>【worker的使用】</strong><br>web worker的使用非常简单，线程之间通讯的api与html5 postmessage或node.js里面的socket.io方法类似。</p>
+<p>通讯：      </p>
+<ol>
+<li>发送方：postMessage(data)      </li>
+<li>接收方：onmessage(event)</li>
+</ol>
+<p>终止web worker:        </p>
+<ol>
+<li>子线程: self.close()</li>
+<li>父线程: worker.terminate()</li>
+</ol>
+<p>按照目前w3c规范，web worker分为两种：专用worker(Dedicated Worker)和共享worker(Shared Worker)。<br><!--more--></p>
+<p>###<strong>【专用worker】</strong><br>实例化一个web worker对象，异步加载子线程文件worker.js，其中的代码将执行。</p>
+<pre><code>var worker = new Worker(&quot;worker.js&quot;);
+</code></pre><p>给worker增加侦听</p>
+<pre><code>worker.onmessage = function (event) {
+    alert(event.data);
+};
+</code></pre><p>在worker.js里，发送消息给父线程     </p>
+<pre><code>postMessage(&apos;hello，imweb&apos;);
+</code></pre><p>在父线程页面就能看到发送过来的信息了。</p>
+<p>同时，在web worker标准中，是支持对象参数的，也就是说我们能够传递json数据。再看一个稍微复杂点的例子，父线程：</p>
+<pre><code>var worker = new Worker(&quot;worker.js&quot;);
+worker.onmessage = function (event) {
+    document.getElementById(&quot;result&quot;).innerHTML=event.data;
+};
+
+function start(){
+    worker.postMessage({&apos;cmd&apos;: &apos;start&apos;, &apos;msg&apos;: &apos;start&apos;});
+}
+
+function pause(){
+    worker.postMessage({&apos;cmd&apos;: &apos;pause&apos;, &apos;msg&apos;: &apos;pause&apos;});
+}
+
+function stop(){
+    worker.postMessage({&apos;cmd&apos;: &apos;stop&apos;, &apos;msg&apos;: &apos;stop&apos;});
+}
+
+function msg(){
+    worker.postMessage({&apos;msg&apos;: &apos;hello imweb&apos;});
+}
+</code></pre><p>worker.js：</p>
+<pre><code>self.onmessage = function (e) {
+    var data = e.data;
+      switch (data.cmd) {
+    case &apos;start&apos;:
+        taskStart(); //大量数据处理
+          postMessage(&apos;WORKER DO: &apos; + data.msg);
+          break;
+    case &apos;pause&apos;:
+        taskPause();
+          postMessage(&apos;WORKER DO: &apos; + data.msg);
+          break;
+    case &apos;stop&apos;:
+          postMessage(&apos;WORKER DO: &apos; + data.msg);
+          self.close(); //终止web worker
+          break;
+    default:
+          postMessage(&apos;MESSAGE: &apos; + data.msg);
+      };
+};
+</code></pre><p>从上面的例子可以看到，一是利用对象参数，进程之间能够较灵活的实现控制；二是当woker执行taskStart()处理大量数据时，只在子进程处理，不会给主页面带来阻塞，通常，处理大量数据会消极影响程序的响应能力，而web worker通过这样的方式，能提供一个更流畅更实时的UI。</p>
+<p>###<strong>【共享worker】</strong><br>共享worker允许线程在同源中的多个页面间进行共享，例如：同源中所有页面或脚本可以与同一个共享线程通信。它的实例化与事件侦听的写法与专用worker略有不同,主页面：</p>
+<pre><code>var worker = new SharedWorker(&apos;shared-worker.js&apos;);
+worker.port.onmessage = function(e) {
+    msg = &apos;Someone just said &quot;&apos; + e.data.message + &apos;&quot;. That is message number &apos; + e.data.counter;
+    console.log(msg);
+};
+worker.port.postMessage(&apos;hello shared worker!&apos;);
+</code></pre><p>shared-worker.js:        </p>
+<pre><code>var counter = 0;
+var connections = [];
+onconnect = function(eConn) {
+       var port = eConn.ports[0]; // 此连接的特有port
+
+   //当有消息的时候通知所有的连接
+   port.onmessage = function(eMsg) { 
+       counter++;
+       for (var i=0; i &lt; connections.length; i++) {
+           connections[i].postMessage({
+               message: eMsg.data,
+               counter: counter
+           });
+       }
+   }
+   port.start();
+   connections.push(port);
+</code></pre><p>用两个窗口打开这个页面，第一个显示：<strong>Someone just said “Hello shared worker!” This is message number 1</strong>，第二个也收到一样的信息，<br>但是后面是<strong>message number 2</strong>。</p>
+<p>###<strong>【安全性和错误检查】</strong><br>出于安全性的考虑，web worker必须遵守同源策略。同时，它的全局对象是worker对象本身，this和self引用的都是worker对象。<br>只能访问：</p>
+<ol>
+<li>navigator 对象（仅限appName, appVersion, platform, userAgent）</li>
+<li>location 对象（只读）</li>
+<li>XMLHttpRequest</li>
+<li>setTimeout(), setInterval(), clearTimeout()和clearInterval()方法</li>
+</ol>
+<p>不能访问：</p>
+<ol>
+<li>DOM(不是线程安全的)</li>
+<li>window 对象</li>
+<li>document 对象</li>
+<li>parent 对象</li>
+</ol>
+<p>worker内部出现错误时，可以用worker.onerror侦听到，error的事件有三个属性：      </p>
+<ol>
+<li>filename: 发生错误的文件名</li>
+<li>lineno: 代码行号</li>
+<li>message: 完整的错误信息</li>
+</ol>
+<p>如：</p>
+<pre><code>worker.onerror = function(e) {
+    console.log(e.filename+&quot;ERROR on line&quot;+e.lineno+&quot;,msg:&quot;+e.message);
+}
+</code></pre><p>###<strong>【web worker的其他尝试】</strong><br>对于比较消耗时间的操作，我们可看到web worker能够发挥它的作用。比如：大量数据排序，精确到像素的canvas计算等。而我们又知道，jsonp加载数据时，动态创建script标签，加载和执行这些过程都是阻塞式的，而web worker正好可以异步加载，这会是更快的方式吗？带着这个疑问我做了下面的试验，分别用jsonp和worker的方式去加载文件，计算数据返回时延：</p>
+<pre><code>function tryJsonp(){
+    var d = (new Date()).valueOf();
+    var jsonp=document.createElement(&quot;script&quot;);  
+    jsonp.type=&quot;text/javascript&quot;;  
+    jsonp.src=&quot;worker.js?_=&quot;+d;  
+    document.getElementsByTagName(&quot;head&quot;)[0].appendChild(jsonp);
+    jsonp.onload = jsonp.onreadystatechange = function(){  
+           if(!this.readyState||this.readyState==&apos;loaded&apos;||this.readyState==&apos;complete&apos;){  
+               console.log(&apos;jsonp: &apos;+ ((new Date()).valueOf() - d));
+        }  
+    }
+}
+function tryWorker(){
+    var d = (new Date()).valueOf();
+    var worker = new Worker(&quot;worker.js&quot;);
+    worker.postMessage({&apos;cmd&apos;: &apos;start&apos;, &apos;msg&apos;: &apos;start&apos;});
+    worker.onmessage = function (event) {
+        console.log(&apos;web worker: &apos;+ ((new Date()).valueOf() - d));
+    };
+}
+</code></pre><p>第一次加载是一份1k大小的文件，每个方法重复5次，返回结果为:<br><img src="/assets/blogImg/web_worker1.png" alt="1k文件重复5次"><br>第二次加载1800k大小的文件，返回结果为：<br><img src="/assets/blogImg/web_worker2.png" alt="1800k文件重复5次"><br>可以看到对于较小的数据，jsonp还是比web worker要快，这可能是实例化worker对象时带来的影响；而数据偏大时，web worker的加载将会更优，而且它可以异步加载。</p>
+<p>THE END.</p>
+</div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://yoursite.com/2013/09/25/web-worker-learning/" data-id="cj2ynd653001i2ktkgp0wfxcv" class="article-share-link">Aktie</a><div class="tags"><a href="/tags/html5/">html5</a><a href="/tags/web/">web</a></div><div class="post-nav"><a href="/2013/10/06/handling-asynchronous-js/" class="pre">统一处理异步的js回调</a><a href="/2013/08/20/oauth-rabbit/" class="next">兔子，胡萝卜与OAuth的故事</a></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><form action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank" class="search-form"><input type="text" name="q" maxlength="20" placeholder="Search"/><input type="hidden" name="sitesearch" value="http://yoursite.com"/></form></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> Kategorien</i></div></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> Tags</i></div><div class="tagcloud"><a href="/tags/黑科技/" style="font-size: 15px;">黑科技</a> <a href="/tags/Markdown/" style="font-size: 15px;">Markdown</a> <a href="/tags/js/" style="font-size: 15px;">js</a> <a href="/tags/html5/" style="font-size: 15px;">html5</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/css/" style="font-size: 15px;">css</a> <a href="/tags/旧事/" style="font-size: 15px;">旧事</a> <a href="/tags/工具/" style="font-size: 15px;">工具</a> <a href="/tags/chrome/" style="font-size: 15px;">chrome</a> <a href="/tags/生活/" style="font-size: 15px;">生活</a> <a href="/tags/安全/" style="font-size: 15px;">安全</a> <a href="/tags/hexo博客/" style="font-size: 15px;">hexo博客</a> <a href="/tags/浏览器/" style="font-size: 15px;">浏览器</a> <a href="/tags/经验/" style="font-size: 15px;">经验</a> <a href="/tags/产品/" style="font-size: 15px;">产品</a> <a href="/tags/药别停/" style="font-size: 15px;">药别停</a> <a href="/tags/前端/" style="font-size: 15px;">前端</a> <a href="/tags/性能/" style="font-size: 15px;">性能</a> <a href="/tags/css3/" style="font-size: 15px;">css3</a> <a href="/tags/产品经理/" style="font-size: 15px;">产品经理</a> <a href="/tags/旅行/" style="font-size: 15px;">旅行</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> Letzte</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2017/05/21/泰山游注意事项/">泰山游注意事项</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/05/21/泰山一日游/">泰山一日游</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/05/21/产品经理的作用/">产品经理的作用</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/05/21/产品经理最重要的能力/">产品经理最重要的能力</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/05/21/Markdown/">Markdown相关</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/05/17/Github-Hexo-Build-personal-blogs/">Github+Hexo Build personal blogs</a></li><li class="post-list-item"><a class="post-list-link" href="/2016/11/06/diary-2016-1030-1105/">旧事 哪天才能歌唱的话 10.30-11.05</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/11/03/nginx-in-fe/">Nginx能为前端开发带来什么？</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/07/06/hack-in-localstorage/">作为一个前端，可以如何机智地弄坏一台电脑？</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/04/28/img-lazy-load/">说到加载图片，我们可以谈些什么</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> Blogroll</i></div><ul></ul><a href="http://www.example1.com/" title="site-name1" target="_blank">site-name1</a><ul></ul><a href="http://www.example2.com/" title="site-name2" target="_blank">site-name2</a><ul></ul><a href="http://www.example3.com/" title="site-name3" target="_blank">site-name3</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">Copyright © 2017 <a href="/." rel="nofollow">大橙子的博客.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><script type="text/javascript" src="//cdn.bootcss.com/fancybox/3.0.47/jquery.fancybox.min.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/fancybox/3.0.47/jquery.fancybox.min.css"><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
